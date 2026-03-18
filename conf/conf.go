@@ -66,7 +66,7 @@ func init() {
 	conf.SetDefault("p2p.enable_holepunch_tracer", false)
 	conf.SetDefault("p2p.enable_conn_notifier", false)
 
-	conf.SetDefault("tun_name", "peanut0")
+	conf.SetDefault("vpn.tun_name", "peanut0")
 
 	// set file path
 	conf.SetConfigFile(confDirPath)

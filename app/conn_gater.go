@@ -2,24 +2,22 @@ package app
 
 import (
 	"log"
-	"os"
 
 	"github.com/libp2p/go-libp2p/core/control"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
 	"github.com/pancpp/peanut/conf"
-	"go.yaml.in/yaml/v2"
 )
 
 type ConnGater struct {
 	allowList map[peer.ID]struct{}
 }
 
-func newConnGater() (*ConnGater, error) {
+func newConnGater(allowlist *Allowlist) (*ConnGater, error) {
 	var peerIdList []peer.ID
 
-	// load peer IDs from discovery servers
+	// add discovery servers to Peer ID list
 	discMultiAddrs := conf.GetStringSlice("p2p.discovery_multiaddrs")
 	for _, addr := range discMultiAddrs {
 		maddr, err := multiaddr.NewMultiaddr(addr)
@@ -36,7 +34,7 @@ func newConnGater() (*ConnGater, error) {
 		peerIdList = append(peerIdList, info.ID)
 	}
 
-	// load peer IDs from relay servers
+	// add relay servers to Peer ID list
 	relayMultiAddrs := conf.GetStringSlice("p2p.relay_multiaddrs")
 	for _, addr := range relayMultiAddrs {
 		maddr, err := multiaddr.NewMultiaddr(addr)
@@ -53,40 +51,17 @@ func newConnGater() (*ConnGater, error) {
 		peerIdList = append(peerIdList, info.ID)
 	}
 
+	// ad allowlist to Peer ID list
+	for _, pid := range allowlist.GetAllPeers() {
+		peerIdList = append(peerIdList, pid)
+	}
+
 	// load peer IDs from allowlist file
-	type AllowList struct {
-		PeerIDs []string `yaml:"peer_ids"`
-	}
-
-	path := conf.GetString("p2p.allowlist_path")
-	if path == "" {
-		return nil, nil
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Printf("reading allowlist file err: %v, path: %s", err, path)
-		return nil, err
-	}
-
-	var alist AllowList
-	if err := yaml.Unmarshal(data, &alist); err != nil {
-		log.Printf("parsing allowlist file err: %v", err)
-		return nil, err
-	}
-
-	for _, peerID := range alist.PeerIDs {
-		id, err := peer.Decode(peerID)
-		if err != nil {
-			return nil, err
-		}
-		peerIdList = append(peerIdList, id)
-	}
-
 	allowList := make(map[peer.ID]struct{}, len(peerIdList))
-	for _, id := range peerIdList {
-		allowList[id] = struct{}{}
+	for _, pid := range peerIdList {
+		allowList[pid] = struct{}{}
 	}
+
 	return &ConnGater{allowList: allowList}, nil
 }
 
