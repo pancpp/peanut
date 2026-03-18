@@ -11,7 +11,8 @@ import (
 )
 
 type HeartbeatMsg struct {
-	Addrs []string `json:"addrs"`
+	IPAddr     string   `json:"ip_addr"`
+	MultiAddrs []string `json:"multi_addrs"`
 }
 
 func heartbeatService(ctx context.Context, h host.Host) {
@@ -34,12 +35,15 @@ func heartbeatService(ctx context.Context, h host.Host) {
 }
 
 func doHeartbeat(ctx context.Context, h host.Host) {
-	addrs := h.Addrs()
-	log.Println("heartbeat: addrs:", addrs)
+	ipAddr := gLocalIP
+	multiAddrs := h.Addrs()
+	log.Printf("heartbeat: ip_addr: %v, multi_addrs: %v", ipAddr, multiAddrs)
 
-	var m HeartbeatMsg
-	for _, addr := range addrs {
-		m.Addrs = append(m.Addrs, addr.String())
+	m := HeartbeatMsg{
+		IPAddr: ipAddr.String(),
+	}
+	for _, addr := range multiAddrs {
+		m.MultiAddrs = append(m.MultiAddrs, addr.String())
 	}
 	b, err := json.Marshal(&m)
 	if err != nil {

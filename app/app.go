@@ -45,7 +45,8 @@ func Init(ctx context.Context) error {
 		IP:   ip,
 		Mask: mask,
 	}
-	log.Println(ipNet.String())
+	ipCIDR := ipNet.String()
+	log.Println("app: local IP address:", ipCIDR)
 
 	// init tun interface
 	tunName := conf.GetString("vpn.tun_name")
@@ -53,7 +54,7 @@ func Init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := tunIface.ReplaceIPAddr(ipNet.String()); err != nil {
+	if err := tunIface.ReplaceIPAddr(ipCIDR); err != nil {
 		return err
 	}
 

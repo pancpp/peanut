@@ -9,8 +9,8 @@ import (
 
 func GenIPv4FromPeerID(pid peer.ID) net.IP {
 	hash := sha256.Sum256([]byte(pid))
-	if hash[0] == 0 && hash[1] == 0 && hash[2] == 0 ||
-		hash[0] == 255 && hash[1] == 255 && hash[2] == 255 {
+	if (hash[0] == 0 && hash[1] == 0 && hash[2] == 0) ||
+		(hash[0] == 255 && hash[1] == 255 && hash[2] == 255) {
 		hash[0] = hash[3]
 		hash[1] = hash[4]
 		hash[2] = hash[5]
