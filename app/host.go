@@ -10,13 +10,16 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/pancpp/peanut/conf"
 )
 
-func newHost(connGater *ConnGater, staticRelay []peer.AddrInfo) (host.Host, error) {
+func newHost(connGater *ConnGater,
+	discoveryAddrInfo []peer.AddrInfo,
+	staticRelayAddrInfo []peer.AddrInfo) (host.Host, error) {
 	// libp2p host options
 	var opts []libp2p.Option
 
@@ -73,7 +76,7 @@ func newHost(connGater *ConnGater, staticRelay []peer.AddrInfo) (host.Host, erro
 	opts = append(opts, libp2p.ForceReachabilityPrivate())
 
 	// option: static relays
-	opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(staticRelay))
+	opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(staticRelayAddrInfo))
 
 	// option: enable holepunching service
 	var holePunchOpts []holepunch.Option
@@ -89,6 +92,11 @@ func newHost(connGater *ConnGater, staticRelay []peer.AddrInfo) (host.Host, erro
 	h, err := libp2p.New(opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	// add discovery server address info
+	for _, addrInfo := range discoveryAddrInfo {
+		h.Peerstore().AddAddrs(addrInfo.ID, addrInfo.Addrs, peerstore.PermanentAddrTTL)
 	}
 
 	// register connection tracker

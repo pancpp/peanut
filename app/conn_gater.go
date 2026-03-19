@@ -7,48 +7,25 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
-	"github.com/pancpp/peanut/conf"
 )
 
 type ConnGater struct {
 	allowList map[peer.ID]struct{}
 }
 
-func newConnGater(allowlist *Allowlist) (*ConnGater, error) {
+func newConnGater(allowlist *Allowlist,
+	discoveryAddrInfo []peer.AddrInfo,
+	staticRelayAddrInfo []peer.AddrInfo) (*ConnGater, error) {
 	var peerIdList []peer.ID
 
 	// add discovery servers to Peer ID list
-	discMultiAddrs := conf.GetStringSlice("p2p.discovery_multiaddrs")
-	for _, addr := range discMultiAddrs {
-		maddr, err := multiaddr.NewMultiaddr(addr)
-		if err != nil {
-			log.Printf("discovery server multi-addr parsing err: %v, %v", err, addr)
-			return nil, err
-		}
-
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			return nil, err
-		}
-
-		peerIdList = append(peerIdList, info.ID)
+	for _, addrInfo := range discoveryAddrInfo {
+		peerIdList = append(peerIdList, addrInfo.ID)
 	}
 
 	// add relay servers to Peer ID list
-	relayMultiAddrs := conf.GetStringSlice("p2p.relay_multiaddrs")
-	for _, addr := range relayMultiAddrs {
-		maddr, err := multiaddr.NewMultiaddr(addr)
-		if err != nil {
-			log.Printf("relay server multi-addr parsing err: %v, %v", err, addr)
-			return nil, err
-		}
-
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			return nil, err
-		}
-
-		peerIdList = append(peerIdList, info.ID)
+	for _, addrInfo := range staticRelayAddrInfo {
+		peerIdList = append(peerIdList, addrInfo.ID)
 	}
 
 	// ad allowlist to Peer ID list

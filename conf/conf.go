@@ -54,7 +54,7 @@ func init() {
 	conf.SetDefault("p2p.private_key_path", "/etc/peanut/private-key.b64")
 	conf.SetDefault("p2p.pnet_psk_path", "")
 	conf.SetDefault("p2p.listen_multiaddrs", []string{"/ip4/0.0.0.0/udp/19882/quic-v1"})
-	conf.SetDefault("p2p.discovery_multiaddrs", []string{"/dns4/disc.cpplint.com/udp/19880/quic-v1/p2p/12D3KooWEJifdgZLnVo87Pres6UqT3wZTGm3T6sVPFxnBQdszvEP"})
+	conf.SetDefault("p2p.discovery_multiaddrs", []string{"/dns4/discovery.cpplint.com/udp/19880/quic-v1/p2p/12D3KooWEJifdgZLnVo87Pres6UqT3wZTGm3T6sVPFxnBQdszvEP"})
 	conf.SetDefault("p2p.relay_multiaddrs", []string{"/dns4/relay1.cpplint.com/udp/19881/quic-v1/p2p/12D3KooWCGzYPZzNror5zms8bP2QciBqs7BTc6GFThDGyXyR1ghZ"})
 	conf.SetDefault("p2p.allowlist_path", "/etc/peanut/allowlist.yaml")
 	conf.SetDefault("p2p.enable_holepunch_tracer", false)

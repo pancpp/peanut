@@ -14,35 +14,43 @@ var (
 )
 
 func Init(ctx context.Context) error {
+	// get discovery server address info
+	discoveryAddrInfo, err := getDiscoveryAddrs()
+	if err != nil {
+		return err
+	}
+	log.Println("app: discovery addr info:", discoveryAddrInfo)
+
+	// get static relay addresse info
+	staticRelayAddrInfo, err := getStaticRelayAddrs()
+	if err != nil {
+		return err
+	}
+	log.Println("app: static relay addr info:", staticRelayAddrInfo)
+
 	// init allowlist
 	allowlist, err := newAllowlist()
 	if err != nil {
 		return err
 	}
 
-	// init static relay addresses
-	staticRelay, err := getStaticRelayAddrs()
-	if err != nil {
-		return err
-	}
-
 	// init connection gater
-	connGater, err := newConnGater(allowlist)
+	connGater, err := newConnGater(allowlist, discoveryAddrInfo, staticRelayAddrInfo)
 	if err != nil {
 		return err
 	}
 
 	// init p2p host
-	p2pHost, err := newHost(connGater, staticRelay)
+	p2pHost, err := newHost(connGater, discoveryAddrInfo, staticRelayAddrInfo)
 	if err != nil {
 		return err
 	}
 
 	// generate local IP address
-	ip := GenIPv4FromPeerID(p2pHost.ID())
+	ipAddr := GenIPv4FromPeerID(p2pHost.ID())
 	mask := net.CIDRMask(32, 32)
 	ipNet := net.IPNet{
-		IP:   ip,
+		IP:   ipAddr,
 		Mask: mask,
 	}
 	ipCIDR := ipNet.String()
@@ -67,10 +75,23 @@ func Init(ctx context.Context) error {
 	// start services
 	tunIface.Start(ctx)
 	forwarder.Start(ctx)
-	go heartbeatService(ctx, p2pHost)
-	go discoveryService(ctx, p2pHost, allowlist)
+	go heartbeatService(ctx, p2pHost, discoveryAddrInfo, ipAddr)
+	go discoveryService(ctx, p2pHost, discoveryAddrInfo, allowlist)
 
 	return nil
+}
+
+func getDiscoveryAddrs() ([]peer.AddrInfo, error) {
+	var discoveryAddrInfo []peer.AddrInfo
+	for _, addrStr := range conf.GetStringSlice("p2p.discovery_multiaddrs") {
+		addrInfo, err := peer.AddrInfoFromString(addrStr)
+		if err != nil {
+			return nil, err
+		}
+		discoveryAddrInfo = append(discoveryAddrInfo, *addrInfo)
+	}
+
+	return discoveryAddrInfo, nil
 }
 
 func getStaticRelayAddrs() ([]peer.AddrInfo, error) {

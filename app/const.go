@@ -6,7 +6,7 @@ const (
 	P2P_DIAL_TIMEOUT  = 10 * time.Second
 	P2P_READ_TIMEOUT  = 10 * time.Second
 	P2P_WRITE_TIMEOUT = 10 * time.Second
-	P2P_PEERSTORE_TTL = 10 * time.Minute
+	P2P_PEERSTORE_TTL = 30 * time.Minute
 )
 
 const (
