@@ -35,10 +35,7 @@ func Init(ctx context.Context) error {
 	}
 
 	// init connection gater
-	connGater, err := newConnGater(allowlist, discoveryAddrInfo, staticRelayAddrInfo)
-	if err != nil {
-		return err
-	}
+	connGater := newConnGater(allowlist, discoveryAddrInfo, staticRelayAddrInfo)
 
 	// init p2p host
 	p2pHost, err := newHost(connGater, discoveryAddrInfo, staticRelayAddrInfo)

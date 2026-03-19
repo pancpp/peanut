@@ -20,16 +20,16 @@ func newBasicIPGetter() *BasicIPGetter {
 
 func (ipg *BasicIPGetter) GetIPv4ByPeerID(pid peer.ID) (net.IPNet, error) {
 	hash := sha256.Sum256([]byte(pid))
-	b2 := (hash[0] & 0b01111111) | 0b01000000
+	b2 := hash[0]
 	b3 := hash[1]
 	b4 := hash[2]
-	if (b2 == 64 && b3 == 0 && b4 == 0) ||
-		(b2 == 127 && b3 == 255 && b4 == 255) {
-		b2 = (hash[3] & 0b01111111) | 0b01000000
+	if (b2 == 0 && b3 == 0 && b4 == 0) ||
+		(b2 == 255 && b3 == 255 && b4 == 255) {
+		b2 = hash[3]
 		b3 = hash[4]
 		b4 = hash[5]
 	}
-	ip := net.IPv4(100, b2, b3, b4)
+	ip := net.IPv4(10, b2, b3, b4)
 	mask := net.CIDRMask(32, 32)
 
 	return net.IPNet{IP: ip, Mask: mask}, nil

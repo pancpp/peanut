@@ -106,7 +106,7 @@ func newHost(connGater *ConnGater,
 
 	// register connection tracker
 	if conf.GetBool("p2p.enable_conn_notifier") {
-		h.Network().Notify(&connNotifyer{})
+		h.Network().Notify(newConnNotifier(h))
 	}
 
 	log.Println("host: PeerID:", h.ID())

@@ -15,7 +15,7 @@ type ConnGater struct {
 
 func newConnGater(allowlist *Allowlist,
 	discoveryAddrInfo []peer.AddrInfo,
-	staticRelayAddrInfo []peer.AddrInfo) (*ConnGater, error) {
+	staticRelayAddrInfo []peer.AddrInfo) *ConnGater {
 	var peerIdList []peer.ID
 
 	// add discovery servers to Peer ID list
@@ -39,7 +39,7 @@ func newConnGater(allowlist *Allowlist,
 		allowList[pid] = struct{}{}
 	}
 
-	return &ConnGater{allowList: allowList}, nil
+	return &ConnGater{allowList: allowList}
 }
 
 func (a *ConnGater) InterceptPeerDial(peer.ID) (allow bool) {
