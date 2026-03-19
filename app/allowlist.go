@@ -18,7 +18,7 @@ type Allowlist struct {
 }
 
 func newAllowlist() (*Allowlist, error) {
-	store := Allowlist{
+	al := Allowlist{
 		peerIdToIpMap: make(map[peer.ID]string),
 		peerIpToIdMap: make(map[string]peer.ID),
 	}
@@ -31,12 +31,12 @@ func newAllowlist() (*Allowlist, error) {
 	allowlistPath := conf.GetString("p2p.allowlist_path")
 	data, err := os.ReadFile(allowlistPath)
 	if err != nil {
-		log.Printf("reading allowlist file err: %v, path: %s", err, allowlistPath)
+		log.Printf("[allowlist] reading allowlist file err: %v, path: %s", err, allowlistPath)
 		return nil, err
 	}
 	var alist AllowList
 	if err := yaml.Unmarshal(data, &alist); err != nil {
-		log.Printf("parsing allowlist file err: %v", err)
+		log.Printf("[allowlist] parsing allowlist file err: %v", err)
 		return nil, err
 	}
 	for _, peerID := range alist.PeerIDs {
@@ -44,30 +44,46 @@ func newAllowlist() (*Allowlist, error) {
 		if err != nil {
 			return nil, err
 		}
-		store.peerIdToIpMap[id] = ""
+		al.peerIdToIpMap[id] = ""
 	}
 
-	return &store, nil
+	return &al, nil
 }
 
-func (store *Allowlist) Update(pid peer.ID, ip net.IP) {
-	store.mtx.Lock()
-	defer store.mtx.Unlock()
+func (al *Allowlist) Update(pid peer.ID, ip net.IP) {
+	al.mtx.Lock()
+	defer al.mtx.Unlock()
 
-	if _, ok := store.peerIdToIpMap[pid]; !ok {
+	if _, ok := al.peerIdToIpMap[pid]; !ok {
 		return
 	}
 
 	ipstr := ip.String()
-	store.peerIdToIpMap[pid] = ipstr
-	store.peerIpToIdMap[ipstr] = pid
+	al.peerIdToIpMap[pid] = ipstr
+	al.peerIpToIdMap[ipstr] = pid
 }
 
-func (store *Allowlist) GetIPByPeerID(pid peer.ID) (net.IP, bool) {
-	store.mtx.RLock()
-	defer store.mtx.RUnlock()
+func (al *Allowlist) PeerIDExists(pid peer.ID) bool {
+	al.mtx.RLock()
+	defer al.mtx.RUnlock()
 
-	ipstr, ok := store.peerIdToIpMap[pid]
+	_, ok := al.peerIdToIpMap[pid]
+	return ok
+}
+
+func (al *Allowlist) IPExists(ip net.IP) bool {
+	al.mtx.RLock()
+	defer al.mtx.RUnlock()
+
+	_, ok := al.peerIpToIdMap[ip.String()]
+	return ok
+}
+
+func (al *Allowlist) GetIPByPeerID(pid peer.ID) (net.IP, bool) {
+	al.mtx.RLock()
+	defer al.mtx.RUnlock()
+
+	ipstr, ok := al.peerIdToIpMap[pid]
 	if !ok {
 		return nil, false
 	}
@@ -75,19 +91,19 @@ func (store *Allowlist) GetIPByPeerID(pid peer.ID) (net.IP, bool) {
 	return net.ParseIP(ipstr), true
 }
 
-func (store *Allowlist) GetPeerIDByIP(ip net.IP) (peer.ID, bool) {
-	store.mtx.RLock()
-	defer store.mtx.RUnlock()
+func (al *Allowlist) GetPeerIDByIP(ip net.IP) (peer.ID, bool) {
+	al.mtx.RLock()
+	defer al.mtx.RUnlock()
 
 	ipstr := ip.String()
-	pid, ok := store.peerIpToIdMap[ipstr]
+	pid, ok := al.peerIpToIdMap[ipstr]
 
 	return pid, ok
 }
 
-func (store *Allowlist) GetAllPeers() []peer.ID {
+func (al *Allowlist) GetAllPeers() []peer.ID {
 	var peers []peer.ID
-	for pid := range store.peerIdToIpMap {
+	for pid := range al.peerIdToIpMap {
 		peers = append(peers, pid)
 	}
 

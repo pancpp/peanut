@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"net"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -18,7 +17,6 @@ type DiscoveryRequestMsg struct {
 }
 
 type DiscoveryPeerMsg struct {
-	IPAddr     string   `json:"ip_addr"`
 	Multiaddrs []string `json:"multi_addrs"`
 }
 
@@ -26,11 +24,29 @@ type DiscoveryResponseMsg struct {
 	PeerInfo map[string]DiscoveryPeerMsg `json:"peer_info"`
 }
 
-func discoveryService(ctx context.Context, h host.Host, discAddrInfo []peer.AddrInfo, allowlist *Allowlist) {
-	peers := allowlist.GetAllPeers()
+type DiscoveryService struct {
+	host         host.Host
+	allowlist    *Allowlist
+	discAddrInfo []peer.AddrInfo
+}
 
+func newDiscoveryService(host host.Host, discAddrInfo []peer.AddrInfo, allowlist *Allowlist) *DiscoveryService {
+	return &DiscoveryService{
+		host:         host,
+		allowlist:    allowlist,
+		discAddrInfo: discAddrInfo,
+	}
+}
+
+func (ds *DiscoveryService) Start(ctx context.Context) {
+	go ds.Run(ctx)
+}
+
+func (ds *DiscoveryService) Run(ctx context.Context) {
 	// discover peers immediately
-	doDiscoverPeers(ctx, h, discAddrInfo, allowlist, peers)
+	for _, addrInfo := range ds.discAddrInfo {
+		ds.discoverPeers(ctx, addrInfo.ID)
+	}
 
 	// periodically udpate peer information
 	ticker := time.NewTicker(DISCOVERY_TICKS)
@@ -41,20 +57,16 @@ func discoveryService(ctx context.Context, h host.Host, discAddrInfo []peer.Addr
 			return
 
 		case <-ticker.C:
-			doDiscoverPeers(ctx, h, discAddrInfo, allowlist, peers)
+			for _, addrInfo := range ds.discAddrInfo {
+				ds.discoverPeers(ctx, addrInfo.ID)
+			}
 		}
 	}
 }
 
-func doDiscoverPeers(ctx context.Context, h host.Host, discAddrInfo []peer.AddrInfo, allowlist *Allowlist, peers []peer.ID) {
-	for _, addrInfo := range discAddrInfo {
-		if err := discoverPeers(ctx, h, addrInfo.ID, allowlist, peers); err != nil {
-			continue
-		}
-	}
-}
+func (ds *DiscoveryService) discoverPeers(ctx context.Context, discPID peer.ID) error {
+	peers := ds.allowlist.GetAllPeers()
 
-func discoverPeers(ctx context.Context, h host.Host, discPID peer.ID, allowlist *Allowlist, peers []peer.ID) error {
 	var reqMsg DiscoveryRequestMsg
 	for _, peer := range peers {
 		reqMsg.PeerIDs = append(reqMsg.PeerIDs, peer.String())
@@ -65,7 +77,7 @@ func discoverPeers(ctx context.Context, h host.Host, discPID peer.ID, allowlist 
 		return err
 	}
 
-	stream, err := h.NewStream(ctx, discPID, PROTOCOL_DISCOVERY)
+	stream, err := ds.host.NewStream(ctx, discPID, PROTOCOL_DISCOVERY)
 	if err != nil {
 		return err
 	}
@@ -102,15 +114,8 @@ func discoverPeers(ctx context.Context, h host.Host, discPID peer.ID, allowlist 
 		}
 
 		// check peer ID map
-		_, ok := allowlist.GetIPByPeerID(pid)
-		if !ok {
+		if !ds.allowlist.PeerIDExists(pid) {
 			continue
-		}
-
-		// update IP address mapping
-		ip := net.ParseIP(peerMsg.IPAddr)
-		if ip != nil {
-			allowlist.Update(pid, ip)
 		}
 
 		// update multiaddrs in host peerstore
@@ -124,7 +129,7 @@ func discoverPeers(ctx context.Context, h host.Host, discPID peer.ID, allowlist 
 			addrs = append(addrs, addr)
 		}
 		if len(addrs) > 0 {
-			h.Peerstore().AddAddrs(pid, addrs, P2P_PEERSTORE_TTL)
+			ds.host.Peerstore().AddAddrs(pid, addrs, P2P_PEERSTORE_TTL)
 		}
 	}
 

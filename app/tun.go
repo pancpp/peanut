@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"net"
 	"time"
 
 	"github.com/songgao/water"
@@ -67,14 +68,7 @@ func (t *TunIface) Start(ctx context.Context) {
 	go t.write(ctx)
 }
 
-func (t *TunIface) ReplaceIPAddr(ipCIDR string) error {
-	// Parse IP addr
-	ipAddr, err := netlink.ParseAddr(ipCIDR)
-	if err != nil {
-		log.Printf("(peanut) parse addr %s err: %v", ipCIDR, err)
-		return err
-	}
-
+func (t *TunIface) ReplaceIPAddr(ipNet net.IPNet) error {
 	// Get link device
 	link, err := netlink.LinkByName(t.iface.Name())
 	if err != nil {
@@ -83,21 +77,14 @@ func (t *TunIface) ReplaceIPAddr(ipCIDR string) error {
 	}
 
 	// Replace IP address
-	if err := netlink.AddrReplace(link, ipAddr); err != nil {
+	if err := netlink.AddrReplace(link, &netlink.Addr{IPNet: &ipNet}); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (t *TunIface) DeleteIPAddr(ipCIDR string) error {
-	// Parse IP addr
-	ipAddr, err := netlink.ParseAddr(ipCIDR)
-	if err != nil {
-		log.Printf("(peanut) parse addr %s err: %v", ipCIDR, err)
-		return err
-	}
-
+func (t *TunIface) DeleteIPAddr(ipNet net.IPNet) error {
 	// Get link device
 	link, err := netlink.LinkByName(t.iface.Name())
 	if err != nil {
@@ -106,7 +93,54 @@ func (t *TunIface) DeleteIPAddr(ipCIDR string) error {
 	}
 
 	// Delete IP address
-	if err := netlink.AddrDel(link, ipAddr); err != nil {
+	if err := netlink.AddrDel(link, &netlink.Addr{IPNet: &ipNet}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *TunIface) ReplaceRoute(ipNet net.IPNet) error {
+	// Get link device
+	link, err := netlink.LinkByName(t.iface.Name())
+	if err != nil {
+		log.Printf("(peanut) get link by name %s err: %v", t.iface.Name(), err)
+		return err
+	}
+
+	// Create route
+	route := netlink.Route{
+		LinkIndex: link.Attrs().Index,
+		Dst:       &ipNet,
+		Table:     52,
+		Scope:     netlink.SCOPE_UNIVERSE,
+	}
+
+	// Replace route
+	if err := netlink.RouteReplace(&route); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *TunIface) DeleteRoute(ipNet net.IPNet) error {
+	// Get link device
+	link, err := netlink.LinkByName(t.iface.Name())
+	if err != nil {
+		log.Printf("(peanut) get link by name %s err: %v", t.iface.Name(), err)
+		return err
+	}
+
+	// Create route
+	route := netlink.Route{
+		LinkIndex: link.Attrs().Index,
+		Dst:       &ipNet,
+		Table:     52,
+	}
+
+	// Replace route
+	if err := netlink.RouteDel(&route); err != nil {
 		return err
 	}
 

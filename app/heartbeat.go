@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"net"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -12,13 +11,28 @@ import (
 )
 
 type HeartbeatMsg struct {
-	IPAddr     string   `json:"ip_addr"`
 	MultiAddrs []string `json:"multi_addrs"`
 }
 
-func heartbeatService(ctx context.Context, h host.Host, discAddrInfo []peer.AddrInfo, ipAddr net.IP) {
+type HeartbeatService struct {
+	host         host.Host
+	discAddrInfo []peer.AddrInfo
+}
+
+func newHeartbeatService(host host.Host, discAddrInfo []peer.AddrInfo) *HeartbeatService {
+	return &HeartbeatService{
+		host:         host,
+		discAddrInfo: discAddrInfo,
+	}
+}
+
+func (hs *HeartbeatService) Start(ctx context.Context) {
+	go hs.Run(ctx)
+}
+
+func (hs *HeartbeatService) Run(ctx context.Context) {
 	// run the heartbeat service immediately
-	doHeartbeat(ctx, h, discAddrInfo, ipAddr)
+	hs.doHeartbeat(ctx)
 
 	// periodically run the heartbeat service
 	ticker := time.NewTicker(HEARTBEAT_TICKS)
@@ -30,17 +44,15 @@ func heartbeatService(ctx context.Context, h host.Host, discAddrInfo []peer.Addr
 			return
 
 		case <-ticker.C:
-			doHeartbeat(ctx, h, discAddrInfo, ipAddr)
+			hs.doHeartbeat(ctx)
 		}
 	}
 }
 
-func doHeartbeat(ctx context.Context, h host.Host, discAddrInfo []peer.AddrInfo, ipAddr net.IP) {
-	multiAddrs := h.Addrs()
+func (hs *HeartbeatService) doHeartbeat(ctx context.Context) {
+	multiAddrs := hs.host.Addrs()
 
-	m := HeartbeatMsg{
-		IPAddr: ipAddr.String(),
-	}
+	var m HeartbeatMsg
 	for _, addr := range multiAddrs {
 		m.MultiAddrs = append(m.MultiAddrs, addr.String())
 	}
@@ -49,13 +61,13 @@ func doHeartbeat(ctx context.Context, h host.Host, discAddrInfo []peer.AddrInfo,
 		log.Println("json marshal err")
 		return
 	}
-	for _, addrInfo := range discAddrInfo {
-		postHeartbeatMsg(ctx, h, addrInfo.ID, b)
+	for _, addrInfo := range hs.discAddrInfo {
+		hs.postHeartbeatMsg(ctx, addrInfo.ID, b)
 	}
 }
 
-func postHeartbeatMsg(ctx context.Context, h host.Host, discPID peer.ID, b []byte) {
-	stream, err := h.NewStream(ctx, discPID, PROTOCOL_HEARTBEAT)
+func (hs *HeartbeatService) postHeartbeatMsg(ctx context.Context, discPID peer.ID, b []byte) {
+	stream, err := hs.host.NewStream(ctx, discPID, PROTOCOL_HEARTBEAT)
 	if err != nil {
 		log.Println("[heartbeat] new stream to discovery server err:", err)
 		return

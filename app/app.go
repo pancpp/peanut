@@ -43,27 +43,49 @@ func Init(ctx context.Context) error {
 	// init p2p host
 	p2pHost, err := newHost(connGater, discoveryAddrInfo, staticRelayAddrInfo)
 	if err != nil {
+		log.Println("[app] create p2p host err:", err)
 		return err
 	}
 
-	// generate local IP address
-	ipAddr := GenIPv4FromPeerID(p2pHost.ID())
-	mask := net.CIDRMask(32, 32)
-	ipNet := net.IPNet{
-		IP:   ipAddr,
-		Mask: mask,
+	// create IP getter
+	ipGetter := newBasicIPGetter()
+
+	// get local IPNet
+	localIPNet, err := ipGetter.GetIPv4ByPeerID(p2pHost.ID())
+	if err != nil {
+		log.Println("[app] get local IP err:", err)
+		return err
 	}
-	ipCIDR := ipNet.String()
-	log.Println("app: local IP address:", ipCIDR)
+	log.Println("app: local IP address:", localIPNet.String())
 
 	// init tun interface
 	tunName := conf.GetString("vpn.tun_name")
 	tunIface, err := newTunIface(tunName, TUN_DEFAULT_MTU, TUN_DEFAULT_TIMEOUT)
 	if err != nil {
+		log.Printf("[app] create tun %s err: %v", tunName, err)
 		return err
 	}
-	if err := tunIface.ReplaceIPAddr(ipCIDR); err != nil {
+
+	// set IP address
+	if err := tunIface.ReplaceIPAddr(localIPNet); err != nil {
+		log.Printf("[app] set local IPNet %v err: %v", localIPNet, err)
 		return err
+	}
+
+	// set ip route and add IP to allowlist
+	for _, pid := range allowlist.GetAllPeers() {
+		ipNet, err := ipGetter.GetIPv4ByPeerID(pid)
+		if err != nil {
+			log.Printf("[app] get IPNet of peer %s err: %v", pid, err)
+			return err
+		}
+
+		allowlist.Update(pid, ipNet.IP)
+
+		if err := tunIface.ReplaceRoute(ipNet); err != nil {
+			log.Printf("[app] set IPNet %v to route err: %v", ipNet, err)
+			return err
+		}
 	}
 
 	// init forwarder
@@ -72,11 +94,17 @@ func Init(ctx context.Context) error {
 		return err
 	}
 
+	// create discovery service
+	discoveryService := newDiscoveryService(p2pHost, discoveryAddrInfo, allowlist)
+
+	// create heartbeat service
+	heartbeatService := newHeartbeatService(p2pHost, discoveryAddrInfo)
+
 	// start services
 	tunIface.Start(ctx)
 	forwarder.Start(ctx)
-	go heartbeatService(ctx, p2pHost, discoveryAddrInfo, ipAddr)
-	go discoveryService(ctx, p2pHost, discoveryAddrInfo, allowlist)
+	discoveryService.Start(ctx)
+	heartbeatService.Start(ctx)
 
 	return nil
 }
