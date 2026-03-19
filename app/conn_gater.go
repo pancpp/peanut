@@ -28,12 +28,12 @@ func newConnGater(allowlist *Allowlist,
 		peerIdList = append(peerIdList, addrInfo.ID)
 	}
 
-	// ad allowlist to Peer ID list
+	// add allowlist to Peer ID list
 	for _, pid := range allowlist.GetAllPeers() {
 		peerIdList = append(peerIdList, pid)
 	}
 
-	// load peer IDs from allowlist file
+	// generate connection gater allowlist
 	allowList := make(map[peer.ID]struct{}, len(peerIdList))
 	for _, pid := range peerIdList {
 		allowList[pid] = struct{}{}

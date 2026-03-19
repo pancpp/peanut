@@ -1,0 +1,12 @@
+[Unit]
+Description=A simple P2P based virtual private network: peanut service
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/peanut
+ExecStart=/srv/peanut/peanut -c /srv/peanut/peanut.yaml
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
