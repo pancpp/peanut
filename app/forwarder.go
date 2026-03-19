@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -62,17 +63,21 @@ func (f *Forwarder) handleTunData(ctx context.Context) {
 func (f *Forwarder) processTunData(ctx context.Context, b []byte) {
 	// drop all IPv6 packets
 	if waterutil.IsIPv6(b) {
+		log.Println("[forwarder] drop IPv6 packets")
 		return
 	}
 
 	dstIPAddr := waterutil.IPv4Destination(b).To4()
+	log.Println("[forwarder] dstIPAddr:", dstIPAddr)
 	pid, ok := f.allowlist.GetPeerIDByIP(dstIPAddr)
 	if !ok {
+		log.Println("[forwarder] pid not found")
 		return
 	}
 
 	stream, err := f.host.NewStream(ctx, pid, PROTOCOL_FORWARD)
 	if err != nil {
+		log.Printf("[forwarder] new stream to peer %s err: %v", pid, err)
 		return
 	}
 	defer stream.Close()
@@ -80,6 +85,7 @@ func (f *Forwarder) processTunData(ctx context.Context, b []byte) {
 	stream.SetWriteDeadline(time.Now().Add(P2P_WRITE_TIMEOUT))
 	if _, err := stream.Write(b); err != nil {
 		stream.Reset()
+		log.Printf("[forwarder] write to peer %s err: %v", pid, err)
 		return
 	}
 }

@@ -10,6 +10,10 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const (
+	IP_RULE_PRIORITY = 6000
+)
+
 type TunIface struct {
 	mtu       int
 	timeout   time.Duration
@@ -47,6 +51,18 @@ func newTunIface(name string, mtu int, timeout time.Duration) (*TunIface, error)
 		return nil, err
 	}
 
+	// add IP rule
+	rule := netlink.NewRule()
+	rule.Table = 52
+	rule.Priority = IP_RULE_PRIORITY
+	if exists, err := ruleExists(rule); err != nil {
+		return nil, err
+	} else if !exists {
+		if err := netlink.RuleAdd(rule); err != nil {
+			return nil, err
+		}
+	}
+
 	return &TunIface{
 		mtu:       mtu,
 		timeout:   timeout,
@@ -56,10 +72,33 @@ func newTunIface(name string, mtu int, timeout time.Duration) (*TunIface, error)
 	}, nil
 }
 
+func ruleExists(rule *netlink.Rule) (bool, error) {
+	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return false, err
+	}
+
+	for _, r := range rules {
+		if r.Table == rule.Table && r.Priority == rule.Priority {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (t *TunIface) Close() error {
+	// delete tun
 	if link, err := netlink.LinkByName(t.iface.Name()); err == nil {
 		netlink.LinkSetDown(link)
 	}
+
+	// delete ip rule
+	rule := netlink.NewRule()
+	rule.Table = 52
+	rule.Priority = IP_RULE_PRIORITY
+	netlink.RuleDel(rule)
+
 	return t.iface.Close()
 }
 

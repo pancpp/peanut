@@ -78,7 +78,7 @@ func newHost(connGater *ConnGater,
 	opts = append(opts, libp2p.NATPortMap())
 
 	// option: force reachability private
-	opts = append(opts, libp2p.ForceReachabilityPrivate())
+	// opts = append(opts, libp2p.ForceReachabilityPrivate())
 
 	// option: static relays
 	opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(staticRelayAddrInfo))
