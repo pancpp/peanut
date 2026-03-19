@@ -66,6 +66,11 @@ func newHost(connGater *ConnGater,
 		libp2p.Transport((quic.NewTransport)),
 		libp2p.ListenAddrStrings(listenAddrs...))
 
+	// add connection gater
+	if connGater != nil {
+		opts = append(opts, libp2p.ConnectionGater(connGater))
+	}
+
 	// option: NAT service
 	opts = append(opts, libp2p.EnableNATService())
 
