@@ -58,7 +58,7 @@ func (hs *HeartbeatService) doHeartbeat(ctx context.Context) {
 	}
 	b, err := json.Marshal(&m)
 	if err != nil {
-		log.Println("json marshal err")
+		log.Println("[heartbeat] json marshal err")
 		return
 	}
 	for _, addrInfo := range hs.discAddrInfo {
