@@ -1,4 +1,4 @@
-package app
+package p2p
 
 import (
 	"encoding/base64"
@@ -17,7 +17,7 @@ import (
 	"github.com/pancpp/peanut/conf"
 )
 
-func newHost(connGater *ConnGater,
+func NewHost(connGater *ConnGater,
 	discoveryAddrInfo []peer.AddrInfo,
 	staticRelayAddrInfo []peer.AddrInfo) (host.Host, error) {
 	// libp2p host options
@@ -78,7 +78,7 @@ func newHost(connGater *ConnGater,
 	opts = append(opts, libp2p.NATPortMap())
 
 	// option: force reachability private
-	// opts = append(opts, libp2p.ForceReachabilityPrivate())
+	opts = append(opts, libp2p.ForceReachabilityPrivate())
 
 	// option: static relays
 	opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(staticRelayAddrInfo))
@@ -106,7 +106,7 @@ func newHost(connGater *ConnGater,
 
 	// register connection tracker
 	if conf.GetBool("p2p.enable_conn_notifier") {
-		h.Network().Notify(newConnNotifier(h))
+		h.Network().Notify(NewConnNotifier(h))
 	}
 
 	log.Println("host: PeerID:", h.ID())

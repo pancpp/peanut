@@ -10,46 +10,47 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
+	"github.com/pancpp/peanut/p2p"
 )
 
-type DiscoveryRequestMsg struct {
+type DiscoverRequestMsg struct {
 	PeerIDs []string `json:"peer_ids"`
 }
 
-type DiscoveryPeerMsg struct {
+type DiscoverPeerMsg struct {
 	Multiaddrs []string `json:"multi_addrs"`
 }
 
-type DiscoveryResponseMsg struct {
-	PeerInfo map[string]DiscoveryPeerMsg `json:"peer_info"`
+type DiscoverResponseMsg struct {
+	PeerInfo map[string]DiscoverPeerMsg `json:"peer_info"`
 }
 
-type DiscoveryService struct {
+type DiscoverService struct {
 	host         host.Host
-	allowlist    *Allowlist
+	allowlist    []peer.ID
 	discAddrInfo []peer.AddrInfo
 }
 
-func newDiscoveryService(host host.Host, discAddrInfo []peer.AddrInfo, allowlist *Allowlist) *DiscoveryService {
-	return &DiscoveryService{
+func newDiscoverService(host host.Host, discAddrInfo []peer.AddrInfo, allowlist []peer.ID) *DiscoverService {
+	return &DiscoverService{
 		host:         host,
 		allowlist:    allowlist,
 		discAddrInfo: discAddrInfo,
 	}
 }
 
-func (ds *DiscoveryService) Start(ctx context.Context) {
+func (ds *DiscoverService) Start(ctx context.Context) {
 	go ds.Run(ctx)
 }
 
-func (ds *DiscoveryService) Run(ctx context.Context) {
+func (ds *DiscoverService) Run(ctx context.Context) {
 	// discover peers immediately
 	for _, addrInfo := range ds.discAddrInfo {
 		ds.discoverPeers(ctx, addrInfo.ID)
 	}
 
 	// periodically udpate peer information
-	ticker := time.NewTicker(DISCOVERY_TICKS)
+	ticker := time.NewTicker(DISCOVER_TICKS)
 	defer ticker.Stop()
 	for {
 		select {
@@ -64,44 +65,42 @@ func (ds *DiscoveryService) Run(ctx context.Context) {
 	}
 }
 
-func (ds *DiscoveryService) discoverPeers(ctx context.Context, discPID peer.ID) error {
-	peers := ds.allowlist.GetAllPeers()
-
-	var reqMsg DiscoveryRequestMsg
-	for _, peer := range peers {
+func (ds *DiscoverService) discoverPeers(ctx context.Context, discPID peer.ID) error {
+	var reqMsg DiscoverRequestMsg
+	for _, peer := range ds.allowlist {
 		reqMsg.PeerIDs = append(reqMsg.PeerIDs, peer.String())
 	}
 	b, err := json.Marshal(&reqMsg)
 	if err != nil {
-		log.Println("[discovery] json marshal err:", err)
+		log.Println("[discover] json marshal err:", err)
 		return err
 	}
 
-	stream, err := ds.host.NewStream(ctx, discPID, PROTOCOL_DISCOVERY)
+	stream, err := ds.host.NewStream(ctx, discPID, p2p.PROTOCOL_DISCOVER)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
-	stream.SetWriteDeadline(time.Now().Add(P2P_WRITE_TIMEOUT))
+	stream.SetWriteDeadline(time.Now().Add(p2p.P2P_WRITE_TIMEOUT))
 	if _, err := stream.Write(b); err != nil {
-		log.Printf("[discovery] write to peer %s err: %v", discPID, err)
+		log.Printf("[discover] write to peer %s err: %v", discPID, err)
 		stream.Reset()
 		return err
 	}
 	stream.CloseWrite()
 
-	stream.SetReadDeadline(time.Now().Add(P2P_READ_TIMEOUT))
+	stream.SetReadDeadline(time.Now().Add(p2p.P2P_READ_TIMEOUT))
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		log.Printf("[discovery] read from peer %s err: %v", discPID, err)
+		log.Printf("[discover] read from peer %s err: %v", discPID, err)
 		stream.Reset()
 		return err
 	}
 
-	var respMsg DiscoveryResponseMsg
+	var respMsg DiscoverResponseMsg
 	if err := json.Unmarshal(data, &respMsg); err != nil {
-		log.Printf("[discovery] json unmarshal err: %v", err)
+		log.Printf("[discover] json unmarshal err: %v", err)
 		return err
 	}
 
@@ -109,12 +108,7 @@ func (ds *DiscoveryService) discoverPeers(ctx context.Context, discPID peer.ID) 
 	for pidStr, peerMsg := range respMsg.PeerInfo {
 		pid, err := peer.Decode(pidStr)
 		if err != nil {
-			log.Printf("[discovery] invalid peer ID %s: %v", pidStr, err)
-			continue
-		}
-
-		// check peer ID map
-		if !ds.allowlist.PeerIDExists(pid) {
+			log.Printf("[discover] invalid peer ID %s: %v", pidStr, err)
 			continue
 		}
 
@@ -123,17 +117,17 @@ func (ds *DiscoveryService) discoverPeers(ctx context.Context, discPID peer.ID) 
 		for _, addrStr := range peerMsg.Multiaddrs {
 			addr, err := multiaddr.NewMultiaddr(addrStr)
 			if err != nil {
-				log.Printf("[discovery] invalid multiaddr %s: %v", addrStr, err)
+				log.Printf("[discover] invalid multiaddr %s: %v", addrStr, err)
 				continue
 			}
 			addrs = append(addrs, addr)
 		}
 		if len(addrs) > 0 {
-			ds.host.Peerstore().AddAddrs(pid, addrs, P2P_PEERSTORE_TTL)
+			ds.host.Peerstore().AddAddrs(pid, addrs, p2p.P2P_PEERSTORE_TTL)
 		}
 	}
 
-	log.Println("[discovery] discovered:", string(data))
+	log.Println("[discover] discovered:", string(data))
 
 	return nil
 }

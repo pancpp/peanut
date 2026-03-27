@@ -1,4 +1,4 @@
-package app
+package p2p
 
 import (
 	"log"
@@ -12,7 +12,7 @@ type ConnNotifier struct {
 	host host.Host
 }
 
-func newConnNotifier(host host.Host) *ConnNotifier {
+func NewConnNotifier(host host.Host) *ConnNotifier {
 	return &ConnNotifier{host: host}
 }
 

@@ -1,4 +1,4 @@
-package app
+package netif
 
 import (
 	"context"
@@ -10,19 +10,15 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-const (
-	IP_RULE_PRIORITY = 6000
-)
-
 type TunIface struct {
-	mtu       int
-	timeout   time.Duration
-	iface     *water.Interface
-	readChan  chan []byte
-	writeChan chan []byte
+	mtu         int
+	timeout     time.Duration
+	iface       *water.Interface
+	fromTunChan chan []byte
+	toTunChan   chan []byte
 }
 
-func newTunIface(name string, mtu int, timeout time.Duration) (*TunIface, error) {
+func NewTunIface(name string, mtu int, timeout time.Duration, fromTunChan, toTunChan chan []byte) (*TunIface, error) {
 	// Create tun interface
 	tunconf := water.Config{
 		DeviceType: water.TUN,
@@ -51,40 +47,13 @@ func newTunIface(name string, mtu int, timeout time.Duration) (*TunIface, error)
 		return nil, err
 	}
 
-	// add IP rule
-	rule := netlink.NewRule()
-	rule.Table = 52
-	rule.Priority = IP_RULE_PRIORITY
-	if exists, err := ruleExists(rule); err != nil {
-		return nil, err
-	} else if !exists {
-		if err := netlink.RuleAdd(rule); err != nil {
-			return nil, err
-		}
-	}
-
 	return &TunIface{
-		mtu:       mtu,
-		timeout:   timeout,
-		iface:     iface,
-		readChan:  make(chan []byte),
-		writeChan: make(chan []byte),
+		mtu:         mtu,
+		timeout:     timeout,
+		iface:       iface,
+		fromTunChan: fromTunChan,
+		toTunChan:   toTunChan,
 	}, nil
-}
-
-func ruleExists(rule *netlink.Rule) (bool, error) {
-	rules, err := netlink.RuleList(netlink.FAMILY_ALL)
-	if err != nil {
-		return false, err
-	}
-
-	for _, r := range rules {
-		if r.Table == rule.Table && r.Priority == rule.Priority {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func (t *TunIface) Close() error {
@@ -92,12 +61,6 @@ func (t *TunIface) Close() error {
 	if link, err := netlink.LinkByName(t.iface.Name()); err == nil {
 		netlink.LinkSetDown(link)
 	}
-
-	// delete ip rule
-	rule := netlink.NewRule()
-	rule.Table = 52
-	rule.Priority = IP_RULE_PRIORITY
-	netlink.RuleDel(rule)
 
 	return t.iface.Close()
 }
@@ -194,14 +157,6 @@ func (t *TunIface) MTU() int {
 	return t.mtu
 }
 
-func (t *TunIface) GetReadTunChan() <-chan []byte {
-	return t.readChan
-}
-
-func (t *TunIface) GetWriteTunChan() chan []byte {
-	return t.writeChan
-}
-
 func (t *TunIface) read(ctx context.Context) {
 	for {
 		b := make([]byte, t.mtu)
@@ -218,7 +173,7 @@ func (t *TunIface) read(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case t.readChan <- b[:n]:
+		case t.fromTunChan <- b[:n]:
 		}
 	}
 }
@@ -229,7 +184,7 @@ func (t *TunIface) write(ctx context.Context) {
 		case <-ctx.Done():
 			return
 
-		case b := <-t.writeChan:
+		case b := <-t.toTunChan:
 			t.iface.Write(b)
 		}
 	}

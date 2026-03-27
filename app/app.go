@@ -4,9 +4,13 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pancpp/peanut/conf"
+	"github.com/pancpp/peanut/netif"
+	"github.com/pancpp/peanut/p2p"
+	"go.yaml.in/yaml/v2"
 )
 
 var (
@@ -29,16 +33,16 @@ func Init(ctx context.Context) error {
 	log.Println("app: static relay addr info:", staticRelayAddrInfo)
 
 	// init allowlist
-	allowlist, err := newAllowlist()
+	allowlist, err := getAllowlist()
 	if err != nil {
 		return err
 	}
 
 	// init connection gater
-	connGater := newConnGater(allowlist, discoveryAddrInfo, staticRelayAddrInfo)
+	connGater := p2p.NewConnGater(allowlist, discoveryAddrInfo, staticRelayAddrInfo)
 
 	// init p2p host
-	p2pHost, err := newHost(connGater, discoveryAddrInfo, staticRelayAddrInfo)
+	p2pHost, err := p2p.NewHost(connGater, discoveryAddrInfo, staticRelayAddrInfo)
 	if err != nil {
 		log.Println("[app] create p2p host err:", err)
 		return err
@@ -56,8 +60,10 @@ func Init(ctx context.Context) error {
 	log.Println("app: local IP address:", localIPNet.String())
 
 	// init tun interface
+	fromTunChan := make(chan []byte)
+	toTunChan := make(chan []byte)
 	tunName := conf.GetString("vpn.tun_name")
-	tunIface, err := newTunIface(tunName, TUN_DEFAULT_MTU, TUN_DEFAULT_TIMEOUT)
+	tunIface, err := netif.NewTunIface(tunName, netif.TUN_DEFAULT_MTU, netif.TUN_DEFAULT_TIMEOUT, fromTunChan, toTunChan)
 	if err != nil {
 		log.Printf("[app] create tun %s err: %v", tunName, err)
 		return err
@@ -69,16 +75,23 @@ func Init(ctx context.Context) error {
 		return err
 	}
 
+	// init IP rule
+	if err := netif.InitIPRule(); err != nil {
+		log.Println("[app] init IP rule err:", err)
+		return err
+	}
+
+	// create route table
+	routeTab := netif.NewRouteTable()
+
 	// set ip route and add IP to allowlist
-	for _, pid := range allowlist.GetAllPeers() {
+	for _, pid := range allowlist {
 		ipNet, err := ipGetter.GetIPv4ByPeerID(pid)
 		if err != nil {
 			log.Printf("[app] get IPNet of peer %s err: %v", pid, err)
 			return err
 		}
-
-		allowlist.Update(pid, ipNet.IP)
-
+		routeTab.Set(pid, ipNet.IP)
 		if err := tunIface.ReplaceRoute(ipNet); err != nil {
 			log.Printf("[app] set IPNet %v to route err: %v", ipNet, err)
 			return err
@@ -86,22 +99,22 @@ func Init(ctx context.Context) error {
 	}
 
 	// init forwarder
-	forwarder, err := newForwarder(p2pHost, tunIface, allowlist)
+	forwarder, err := netif.NewForwarder(p2pHost, routeTab, toTunChan, fromTunChan)
 	if err != nil {
 		return err
 	}
 
-	// create discovery service
-	discoveryService := newDiscoveryService(p2pHost, discoveryAddrInfo, allowlist)
+	// create discover service
+	discoverService := newDiscoverService(p2pHost, discoveryAddrInfo, allowlist)
 
-	// create heartbeat service
-	heartbeatService := newHeartbeatService(p2pHost, discoveryAddrInfo)
+	// create announce service
+	announceService := newAnnounceService(p2pHost, discoveryAddrInfo)
 
 	// start services
 	tunIface.Start(ctx)
 	forwarder.Start(ctx)
-	discoveryService.Start(ctx)
-	heartbeatService.Start(ctx)
+	discoverService.Start(ctx)
+	announceService.Start(ctx)
 
 	return nil
 }
@@ -130,4 +143,34 @@ func getStaticRelayAddrs() ([]peer.AddrInfo, error) {
 	}
 
 	return staticRelayAddrInfo, nil
+}
+
+func getAllowlist() ([]peer.ID, error) {
+	// load peer IDs from allowlist file
+	type AllowList struct {
+		PeerIDs []string `yaml:"peer_ids"`
+	}
+
+	allowlistPath := conf.GetString("p2p.allowlist_path")
+	data, err := os.ReadFile(allowlistPath)
+	if err != nil {
+		log.Printf("[allowlist] reading allowlist file err: %v, path: %s", err, allowlistPath)
+		return nil, err
+	}
+	var alist AllowList
+	if err := yaml.Unmarshal(data, &alist); err != nil {
+		log.Printf("[allowlist] parsing allowlist file err: %v", err)
+		return nil, err
+	}
+
+	peerIdList := make([]peer.ID, 0, len(alist.PeerIDs))
+	for _, peerID := range alist.PeerIDs {
+		id, err := peer.Decode(peerID)
+		if err != nil {
+			return nil, err
+		}
+		peerIdList = append(peerIdList, id)
+	}
+
+	return peerIdList, nil
 }

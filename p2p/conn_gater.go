@@ -1,4 +1,4 @@
-package app
+package p2p
 
 import (
 	"log"
@@ -13,7 +13,7 @@ type ConnGater struct {
 	allowList map[peer.ID]struct{}
 }
 
-func newConnGater(allowlist *Allowlist,
+func NewConnGater(allowlist []peer.ID,
 	discoveryAddrInfo []peer.AddrInfo,
 	staticRelayAddrInfo []peer.AddrInfo) *ConnGater {
 	var peerIdList []peer.ID
@@ -29,7 +29,7 @@ func newConnGater(allowlist *Allowlist,
 	}
 
 	// add allowlist to Peer ID list
-	for _, pid := range allowlist.GetAllPeers() {
+	for _, pid := range allowlist {
 		peerIdList = append(peerIdList, pid)
 	}
 
