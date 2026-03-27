@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	multiaddr "github.com/multiformats/go-multiaddr"
 	"github.com/pancpp/peanut/p2p"
 )
 
@@ -18,22 +20,24 @@ type AnnounceMsg struct {
 type AnnounceService struct {
 	host         host.Host
 	discAddrInfo []peer.AddrInfo
+	denyList     []net.IPNet
 }
 
-func newAnnounceService(host host.Host, discAddrInfo []peer.AddrInfo) *AnnounceService {
+func newAnnounceService(host host.Host, discAddrInfo []peer.AddrInfo, denyList []net.IPNet) *AnnounceService {
 	return &AnnounceService{
 		host:         host,
 		discAddrInfo: discAddrInfo,
+		denyList:     denyList,
 	}
 }
 
-func (hs *AnnounceService) Start(ctx context.Context) {
-	go hs.Run(ctx)
+func (as *AnnounceService) Start(ctx context.Context) {
+	go as.Run(ctx)
 }
 
-func (hs *AnnounceService) Run(ctx context.Context) {
+func (as *AnnounceService) Run(ctx context.Context) {
 	// run the announce service immediately
-	hs.announce(ctx)
+	as.announce(ctx)
 
 	// periodically run the announce service
 	ticker := time.NewTicker(ANNOUNCE_TICKS)
@@ -45,30 +49,53 @@ func (hs *AnnounceService) Run(ctx context.Context) {
 			return
 
 		case <-ticker.C:
-			hs.announce(ctx)
+			as.announce(ctx)
 		}
 	}
 }
 
-func (hs *AnnounceService) announce(ctx context.Context) {
-	multiAddrs := hs.host.Addrs()
+func (as *AnnounceService) denied(addr multiaddr.Multiaddr) bool {
+	var ip net.IP
+	multiaddr.ForEach(addr, func(c multiaddr.Component) bool {
+		switch c.Protocol().Code {
+		case multiaddr.P_IP4, multiaddr.P_IP6:
+			ip = net.ParseIP(c.Value())
+			return false // stop iteration once found
+		}
+		return true
+	})
+
+	for _, ipnet := range as.denyList {
+		if ipnet.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (as *AnnounceService) announce(ctx context.Context) {
+	multiAddrs := as.host.Addrs()
 
 	var m AnnounceMsg
 	for _, addr := range multiAddrs {
-		m.MultiAddrs = append(m.MultiAddrs, addr.String())
+		if !as.denied(addr) {
+			m.MultiAddrs = append(m.MultiAddrs, addr.String())
+		}
 	}
+
 	b, err := json.Marshal(&m)
 	if err != nil {
 		log.Println("[announce] json marshal err")
 		return
 	}
-	for _, addrInfo := range hs.discAddrInfo {
-		hs.postMsg(ctx, addrInfo.ID, b)
+	for _, addrInfo := range as.discAddrInfo {
+		as.postMsg(ctx, addrInfo.ID, b)
 	}
 }
 
-func (hs *AnnounceService) postMsg(ctx context.Context, discPID peer.ID, b []byte) {
-	stream, err := hs.host.NewStream(ctx, discPID, p2p.PROTOCOL_ANNOUNCE)
+func (as *AnnounceService) postMsg(ctx context.Context, discPID peer.ID, b []byte) {
+	stream, err := as.host.NewStream(ctx, discPID, p2p.PROTOCOL_ANNOUNCE)
 	if err != nil {
 		log.Println("[announce] new stream to discovery server err:", err)
 		return
@@ -83,5 +110,5 @@ func (hs *AnnounceService) postMsg(ctx context.Context, discPID peer.ID, b []byt
 
 	stream.Close()
 
-	log.Println("[announce] reported:", string(b))
+	log.Println("[announce] announced:", string(b))
 }

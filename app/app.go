@@ -108,7 +108,8 @@ func Init(ctx context.Context) error {
 	discoverService := newDiscoverService(p2pHost, discoveryAddrInfo, allowlist)
 
 	// create announce service
-	announceService := newAnnounceService(p2pHost, discoveryAddrInfo)
+	_, localhostIPNet, _ := net.ParseCIDR("127.0.0.1/8")
+	announceService := newAnnounceService(p2pHost, discoveryAddrInfo, []net.IPNet{localIPNet, *localhostIPNet})
 
 	// start services
 	tunIface.Start(ctx)
