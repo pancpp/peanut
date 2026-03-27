@@ -36,13 +36,23 @@ func (as *AnnounceService) Start(ctx context.Context) {
 }
 
 func (as *AnnounceService) Run(ctx context.Context) {
-	// run the announce service immediately
-	as.announce(ctx)
+	// run the announce service with a short period
+	shortTicker := time.NewTicker(ANNOUNCE_SHORT_TICKS)
+	for i := 0; i < 3; i++ {
+		select {
+		case <-ctx.Done():
+			shortTicker.Stop()
+			return
+
+		case <-shortTicker.C:
+			as.announce(ctx)
+		}
+	}
+	shortTicker.Stop()
 
 	// periodically run the announce service
 	ticker := time.NewTicker(ANNOUNCE_TICKS)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():

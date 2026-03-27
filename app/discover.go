@@ -44,10 +44,21 @@ func (ds *DiscoverService) Start(ctx context.Context) {
 }
 
 func (ds *DiscoverService) Run(ctx context.Context) {
-	// discover peers immediately
-	for _, addrInfo := range ds.discAddrInfo {
-		ds.discoverPeers(ctx, addrInfo.ID)
+	// discover peers with a short period
+	shortTicker := time.NewTicker(DISCOVER_SHORT_TICKS)
+	for i := 0; i < 3; i++ {
+		select {
+		case <-ctx.Done():
+			shortTicker.Stop()
+			return
+
+		case <-shortTicker.C:
+			for _, addrInfo := range ds.discAddrInfo {
+				ds.discoverPeers(ctx, addrInfo.ID)
+			}
+		}
 	}
+	shortTicker.Stop()
 
 	// periodically udpate peer information
 	ticker := time.NewTicker(DISCOVER_TICKS)
