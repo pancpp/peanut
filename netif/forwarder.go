@@ -66,7 +66,6 @@ func (f *Forwarder) handleTunData(ctx context.Context) {
 func (f *Forwarder) processTunData(ctx context.Context, b []byte) {
 	// drop all IPv6 packets
 	if waterutil.IsIPv6(b) {
-		log.Println("[forwarder] drop IPv6 packets")
 		return
 	}
 

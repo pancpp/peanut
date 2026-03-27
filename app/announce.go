@@ -59,7 +59,7 @@ func (hs *AnnounceService) announce(ctx context.Context) {
 	}
 	b, err := json.Marshal(&m)
 	if err != nil {
-		log.Println("[heartbeat] json marshal err")
+		log.Println("[announce] json marshal err")
 		return
 	}
 	for _, addrInfo := range hs.discAddrInfo {
@@ -70,18 +70,18 @@ func (hs *AnnounceService) announce(ctx context.Context) {
 func (hs *AnnounceService) postMsg(ctx context.Context, discPID peer.ID, b []byte) {
 	stream, err := hs.host.NewStream(ctx, discPID, p2p.PROTOCOL_ANNOUNCE)
 	if err != nil {
-		log.Println("[heartbeat] new stream to discovery server err:", err)
+		log.Println("[announce] new stream to discovery server err:", err)
 		return
 	}
 
 	stream.SetWriteDeadline(time.Now().Add(p2p.P2P_WRITE_TIMEOUT))
 	if _, err := stream.Write(b); err != nil {
-		log.Printf("[heartbeat] write to peer %s err: %v", discPID, err)
+		log.Printf("[announce] write to peer %s err: %v", discPID, err)
 		stream.Reset()
 		return
 	}
 
 	stream.Close()
 
-	log.Println("[heartbeat] reported:", string(b))
+	log.Println("[announce] reported:", string(b))
 }
