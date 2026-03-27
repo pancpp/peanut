@@ -3,8 +3,8 @@ package p2p
 import "time"
 
 const (
-	PROTOCOL_ANNOUNCE = "/peanut/heartbeat/1.0" // /peanut/announce/1.0
-	PROTOCOL_DISCOVER = "/peanut/discovery/1.0"
+	PROTOCOL_ANNOUNCE = "/peanut/announce/1.0"
+	PROTOCOL_DISCOVER = "/peanut/discover/1.0"
 	PROTOCOL_FORWARD  = "/peanut/forward/1.0"
 )
 

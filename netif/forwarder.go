@@ -72,19 +72,14 @@ func (f *Forwarder) processTunData(ctx context.Context, b []byte) {
 
 	dstIPAddr := waterutil.IPv4Destination(b).To4()
 
-	if f.enableTrace {
-		log.Println("[forwarder] dstIPAddr:", dstIPAddr)
-	}
-
 	pid, ok := f.routeTab.FindPeerID(dstIPAddr)
 	if !ok {
-		log.Println("[forwarder] pid not found")
 		return
 	}
 
 	stream, err := f.host.NewStream(ctx, pid, p2p.PROTOCOL_FORWARD)
 	if err != nil {
-		log.Printf("[forwarder] new stream to peer %s err: %v", pid, err)
+		log.Printf("[forwarder] new stream to peer %s err: %v, addr: %v", pid, err, f.host.Peerstore().PeerInfo(pid))
 		return
 	}
 	defer stream.Close()
